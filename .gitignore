@@ -1,0 +1,42 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# macOS
+.DS_Store
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# Python packaging
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
+
+# Local env files
+.env
+.env.local
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Generated artifacts created by analysis.py (ignored so they are not committed)
+e-commerce_projeto_est/cleaned_orders.csv
+e-commerce_projeto_est/outliers.csv
+e-commerce_projeto_est/monthly_revenue.csv
+e-commerce_projeto_est/data_quality_report.md
+e-commerce_projeto_est/unmatched_order_items.csv
+e-commerce_projeto_est/figures/
+e-commerce_projeto_est/*.png
+e-commerce_projeto_est/*.jpg
