@@ -42,6 +42,62 @@ Saída esperada (no console)
 - Cabeçalhos em português com KPIs e tabelas legíveis (ex.: "KPIs", "Conversão por Forma de Pagamento", "Mix de Receita por Categoria de Produto", "Preço x Desconto (Elasticidade Simplificada)").
 - Mensagens que indicam onde os arquivos foram gravados (ex.: `data_quality_report.md`, `outliers.csv`, imagens em `figures/`).
 
+Como rodar em outros sistemas operacionais
+
+Windows (PowerShell)
+
+1) Criar e ativar virtualenv (PowerShell):
+
+```powershell
+python -m venv .venv
+# ativar o venv no PowerShell
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+2) Rodar a análise:
+
+```powershell
+python analysis.py
+```
+
+Windows (CMD)
+
+1) Criar e ativar virtualenv (CMD):
+
+```cmd
+python -m venv .venv
+.venv\Scripts\activate.bat
+pip install -r requirements.txt
+```
+
+2) Rodar a análise:
+
+```cmd
+python analysis.py
+```
+
+Linux (bash)
+
+1) Criar e ativar virtualenv (bash):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+2) Rodar a análise:
+
+```bash
+python3 analysis.py
+```
+
+Observações comuns
+- Se ocorrerem erros de dependências, verifique a versão do Python (recomendado 3.8+) e reinstale as dependências.
+- Caso você já tenha um ambiente Conda, prefira criar um env Conda e instalar as dependências com pip/conda conforme necessário.
+- Os artefatos gerados pelo script ficam em `e-commerce_projeto_est/` e podem ser recriados rodando novamente `analysis.py`.
+
 Notas e dicas de auditoria
 - Se o `Mix de Receita por Categoria` mostrar apenas uma categoria (por exemplo "Eletrônicos"), verifique `DIM_Products.csv` — o script também loga as categorias únicas do catálogo.
 - Se houver itens não mapeados, abra `e-commerce_projeto_est/unmatched_order_items.csv` para revisar e decidir entre: correção manual dos nomes, regras de normalização (trim/lower), ou fuzzy matching.
