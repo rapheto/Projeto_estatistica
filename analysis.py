@@ -489,33 +489,6 @@ def main():
 		_log_section('Preço x Desconto (Elasticidade Simplificada)')
 		logging.info('\n%s', _table)
 
-		# New plots for product analysis
-		try:
-			# Category revenue bar plot
-			if not cat_mix.empty:
-				plt.figure(figsize=(10, 6))
-				cat_mix['revenue'].sort_values(ascending=True).plot(kind='barh')
-				plt.title('Total Revenue by Product Category')
-				plt.xlabel('Total Revenue (BRL)')
-				plt.ylabel('Category')
-				plt.tight_layout()
-				plt.savefig(FIG_DIR / 'category_revenue_bar.png')
-				plt.close()
-
-			# Price vs Discount boxplot
-			if 'Price' in order_items.columns:
-				plt.figure(figsize=(8, 5))
-				sns.boxplot(data=order_items, x='has_discount', y='Price')
-				plt.title('Price Distribution: With vs. Without Discount')
-				plt.xlabel('Has Discount')
-				plt.ylabel('Price (BRL)')
-				plt.xticks([0, 1], ['No', 'Yes'])
-				plt.tight_layout()
-				plt.savefig(FIG_DIR / 'price_discount_box.png')
-				plt.close()
-		except Exception as e:
-			warnings.warn(f"Erro ao gerar gráficos de produtos: {e}")
-
 	# EDA plots
 	sns.set(style='whitegrid')
 	try:
@@ -535,6 +508,26 @@ def main():
 			plt.xlabel('Days')
 			plt.tight_layout()
 			plt.savefig(FIG_DIR / 'leadtime_box.png')
+			plt.close()
+
+		# Discount plots: histogram and boxplot
+		if 'Discount' in merged:
+			# histogram
+			plt.figure(figsize=(8,4))
+			sns.histplot(merged['Discount'].dropna(), kde=True, bins=30)
+			plt.title('Distribution of Discount')
+			plt.xlabel('Discount (fraction)')
+			plt.tight_layout()
+			plt.savefig(FIG_DIR / 'discount_hist.png')
+			plt.close()
+
+			# boxplot
+			plt.figure(figsize=(6,4))
+			sns.boxplot(x=merged['Discount'].dropna())
+			plt.title('Discount - boxplot')
+			plt.xlabel('Discount (fraction)')
+			plt.tight_layout()
+			plt.savefig(FIG_DIR / 'discount_box.png')
 			plt.close()
 
 		corr_cols = [c for c in ['Subtotal','Total','Discount','P_Sevice','delivery_lead_time','delivery_delay_days'] if c in merged.columns]
@@ -572,23 +565,7 @@ def main():
 				ticket_ci = stats.t.interval(0.95, df=len(tickets)-1, loc=ticket_mean, scale=ticket_se)
 				# pretty print
 				print(f"Ticket médio: {fmt_currency(ticket_mean)} | IC 95%: ({fmt_currency(ticket_ci[0])}, {fmt_currency(ticket_ci[1])})")
-				# visualization: bar with error bar
-				try:
-					plt.figure(figsize=(4,6))
-					plt.bar(0, ticket_mean, color='#2a9d8f', width=0.6)
-					plt.errorbar(0, ticket_mean, yerr=[[ticket_mean - ticket_ci[0]], [ticket_ci[1] - ticket_mean]], fmt='none', ecolor='black', capsize=8)
-					plt.xlim(-0.5,0.5)
-					plt.xticks([])
-					plt.ylabel('Valor (BRL)')
-					plt.title('Ticket médio com IC 95%')
-					# annotate values
-					plt.text(0, ticket_mean, fmt_currency(ticket_mean), ha='center', va='bottom')
-					plt.tight_layout()
-					plt.savefig(FIG_DIR / 'ticket_mean_ci.png')
-					plt.close()
-					logging.info('Figura de inferência salva: %s', (FIG_DIR / 'ticket_mean_ci.png').name)
-				except Exception as e:
-					logging.warning('Não foi possível gerar figura do ticket: %s', e)
+					# visualization removed: figures for ticket mean are optional and not saved by default
 			except Exception:
 				print('Não foi possível calcular o IC t (dados insuficientes).')
 
@@ -602,23 +579,7 @@ def main():
 			prop_se = np.sqrt(prop*(1-prop)/n)
 			prop_ci = (prop - 1.96*prop_se, prop + 1.96*prop_se)
 			print(f"Proporção de atrasos: {prop:.3%}, IC 95% (aprox.): ({prop_ci[0]:.3%}, {prop_ci[1]:.3%})")
-			# visualization: proportion with CI (bar + error)
-			try:
-				plt.figure(figsize=(4,4))
-				plt.bar(0, prop, color='#e76f51', width=0.6)
-				plt.errorbar(0, prop, yerr=[[prop - prop_ci[0]], [prop_ci[1] - prop]], fmt='none', ecolor='black', capsize=8)
-				plt.xlim(-0.5,0.5)
-				plt.ylim(0,1)
-				plt.xticks([])
-				plt.ylabel('Proporção')
-				plt.title('Proporção de pedidos atrasados (IC 95%)')
-				plt.text(0, prop, f"{prop:.1%}", ha='center', va='bottom')
-				plt.tight_layout()
-				plt.savefig(FIG_DIR / 'late_rate_ci.png')
-				plt.close()
-				logging.info('Figura de inferência salva: %s', (FIG_DIR / 'late_rate_ci.png').name)
-			except Exception as e:
-				logging.warning('Não foi possível gerar figura da proporção de atrasos: %s', e)
+				# visualization removed: proportion plot is optional and not saved by default
 
 	# Save cleaned dataset
 	outpath = DATA_DIR / 'cleaned_orders.csv'
