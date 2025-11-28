@@ -32,6 +32,15 @@ def find_data_dir(root: Path) -> Path:
 
 
 def safe_read_csv(path: Path, **kwargs):
+	"""Lê um CSV de forma segura.
+
+	Parâmetros:
+	- path: caminho para o arquivo CSV (Path)
+	- **kwargs: argumentos passados para `pd.read_csv`
+
+	Retorna um DataFrame ou `None` se o arquivo não existir. Emite um
+	`warnings.warn` quando o arquivo não for encontrado em disco.
+	"""
 	if not path.exists():
 		warnings.warn(f"Arquivo não encontrado: {path}")
 		return None
@@ -39,6 +48,11 @@ def safe_read_csv(path: Path, **kwargs):
 
 
 def fmt_currency(x):
+	"""Formata um número como moeda brasileira (BRL).
+
+	Tenta formatar `x` como `R$ 1,234.56`. Se a formatação falhar,
+	retorna o valor original (útil para valores nulos ou strings).
+	"""
 	try:
 		return f"R$ {x:,.2f}"
 	except Exception:
@@ -46,11 +60,16 @@ def fmt_currency(x):
 
 
 def _log_section(title: str):
+	"""Imprime um cabeçalho de seção simples nos logs.
+
+	Usado para separar visualmente blocos no output do console.
+	"""
 	logging.info('\n' + '=' * 8 + f' {title} ' + '=' * 8)
 
 
+
 def print_kpis(merged: pd.DataFrame):
-	"""Pretty-print a compact KPI summary to the console."""
+	"""Imprime de forma legível um resumo compacto de KPIs no console."""
 	kpis = {}
 	kpis['n_orders'] = len(merged)
 	if 'Total' in merged:
@@ -61,9 +80,9 @@ def print_kpis(merged: pd.DataFrame):
 	if 'P_Sevice' in merged.columns:
 		kpis['freight_total'] = merged['P_Sevice'].sum()
 
-	# build pretty lines
+	# monta linhas formatadas
 	lines = [f"{'Métrica':<28} {'Valor':>18}", '-' * 46]
-	# friendly Portuguese labels
+	# rótulos amigáveis em Português
 	label_map = {
 		'n_orders': 'Número de pedidos',
 		'revenue_total': 'Receita total',
@@ -100,7 +119,7 @@ def generate_data_quality_report(merged: pd.DataFrame, orders: pd.DataFrame, del
 	n_rows = len(merged)
 	report_lines.append(f"# Data quality report\n\nRows analyzed: {n_rows}\n")
 
-	# Trim string columns in place for a few dataframes
+	# Aparar (trim) colunas de texto in-place para alguns DataFrames
 	def _trim_df(df: pd.DataFrame):
 		for c in df.select_dtypes(include=['object']).columns:
 			df[c] = df[c].astype(str).str.strip()
@@ -116,7 +135,7 @@ def generate_data_quality_report(merged: pd.DataFrame, orders: pd.DataFrame, del
 	except Exception as e:
 		logging.warning('Trimming warning: %s', e)
 
-	# Nulls
+	# Valores nulos
 	nulls = merged.isnull().sum().sort_values(ascending=False)
 	null_pct = (nulls / max(1, n_rows) * 100).round(2)
 	report_lines.append('## Missing values (top)\n')
@@ -125,7 +144,7 @@ def generate_data_quality_report(merged: pd.DataFrame, orders: pd.DataFrame, del
 	for col in nulls.index[:50]:
 		report_lines.append(f"|{col}|{int(nulls[col])}|{null_pct[col]}%|")
 
-	# Dtypes
+	# Tipos das colunas (dtypes)
 	dtypes = merged.dtypes
 	report_lines.append('\n## Column types\n')
 	report_lines.append('|column|dtype|')
@@ -133,7 +152,7 @@ def generate_data_quality_report(merged: pd.DataFrame, orders: pd.DataFrame, del
 	for col, dt in dtypes.items():
 		report_lines.append(f"|{col}|{dt}|")
 
-	# Duplicates
+	# Duplicatas
 	dup_mask = merged.duplicated(subset=['Id'], keep=False) if 'Id' in merged.columns else pd.Series([False]*n_rows)
 	n_dup = int(dup_mask.sum())
 	report_lines.append(f"\n## Duplicates\nTotal duplicated rows (by Id): {n_dup}\n")
@@ -145,7 +164,7 @@ def generate_data_quality_report(merged: pd.DataFrame, orders: pd.DataFrame, del
 		if remove_duplicates:
 			merged.drop_duplicates(subset=['Id'], inplace=True)
 
-	# Referential integrity basics
+	# Checagens básicas de integridade referencial
 	report_lines.append('\n## Referential integrity checks\n')
 	if delivery is not None and 'Id' in delivery.columns and 'Id' in orders.columns:
 		orders_ids = set(orders['Id'].dropna().unique())
@@ -155,9 +174,9 @@ def generate_data_quality_report(merged: pd.DataFrame, orders: pd.DataFrame, del
 		report_lines.append(f"Orders without delivery (sample up to 10): {orphan_orders}\n")
 		report_lines.append(f"Deliveries without order (sample up to 10): {orphan_deliveries}\n")
 
-	# Outliers: IQR and z-score
+	# Outliers: IQR e z-score
 	num_cols = merged.select_dtypes(include=[np.number]).columns.tolist()
-	# exclude index-like and counters if present
+	# excluir colunas tipo índice/contadores se presentes
 	exclude = ['Id']
 	num_cols = [c for c in num_cols if c not in exclude]
 	outlier_flags = pd.DataFrame(index=merged.index)
@@ -192,14 +211,14 @@ def generate_data_quality_report(merged: pd.DataFrame, orders: pd.DataFrame, del
 		out_df.to_csv(out_path, index=False)
 		report_lines.append(f"Outliers saved to `{out_path.name}`\n")
 
-	# Save monthly revenue CSV for audit
+	# Salva série mensal de receita para auditoria
 	if 'Order_Date' in merged and 'Total' in merged:
 		rev_month = merged.set_index('Order_Date').resample('ME')['Total'].sum()
 		rev_path = data_dir / 'monthly_revenue.csv'
 		rev_month.to_csv(rev_path, header=['revenue'])
 		report_lines.append(f"Monthly revenue series saved to `{rev_path.name}`\n")
 
-	# Save report
+	# Salva relatório
 	report_path = data_dir / 'data_quality_report.md'
 	report_text = '\n'.join(report_lines)
 	report_path.write_text(report_text)
@@ -213,12 +232,26 @@ def generate_data_quality_report(merged: pd.DataFrame, orders: pd.DataFrame, del
 
 
 def main():
+	"""Ponto de entrada principal do script.
+
+	Fluxo resumido:
+	1. Localiza o diretório de dados (`e-commerce_projeto_est`)
+	2. Lê os CSVs (FACT + DIMs) em pandas DataFrames
+	3. Junta `orders` com `delivery` e `customers` e gera novas features
+	4. Roda checagens de qualidade de dados e salva artefatos auxiliares
+	5. Calcula e imprime KPIs e agregações (conversão, logística, produto)
+	6. Gera gráficos de EDA e faz inferência estatística simples
+	7. Salva um CSV limpo com o dataset final (`cleaned_orders.csv`)
+
+	Observação: o script não se conecta a um banco de dados; todas as
+	operações são feitas em DataFrames carregados de CSV.
+	"""
 	ROOT = Path(__file__).parent
 	DATA_DIR = find_data_dir(ROOT)
 	FIG_DIR = DATA_DIR / 'figures'
 	FIG_DIR.mkdir(exist_ok=True)
 
-	# configure logging for prettier console output
+	# configura logging para saída do console mais legível
 	logging.basicConfig(level=logging.INFO, format='%(message)s')
 	logging.info(f"Usando diretório de dados: {DATA_DIR}")
 
@@ -229,7 +262,7 @@ def main():
 	products = safe_read_csv(DATA_DIR / 'DIM_Products.csv')
 	shopping = safe_read_csv(DATA_DIR / 'DIM_Shopping.csv')
 
-	# Log unique categories in the product catalog (quick sanity check)
+	# Registra categorias únicas no catálogo de produtos (checagem rápida)
 	if products is not None and 'Category' in products.columns:
 		try:
 			cat_counts = products['Category'].value_counts(dropna=False)
@@ -266,7 +299,7 @@ def main():
 		keep_present = [c for c in keep if c in customers.columns]
 		merged = merged.merge(customers[keep_present], on='Id', how='left')
 
-	# Feature engineering
+	# Engenharia de features
 	logging.info('\nFeature engineering...')
 	# converte colunas de data caso não estejam como datetime
 	for col in ['D_Date','D_Forecast']:
@@ -289,7 +322,7 @@ def main():
 	if 'Order_Date' in merged:
 		merged['order_month'] = merged['Order_Date'].dt.to_period('M')
 
-	# Data quality checks (trimming, NAs, duplicates, referential checks, outliers)
+	# Checagens de qualidade de dados (trim, NAs, duplicatas, integridade referencial, outliers)
 	logging.info('\nRunning data quality checks...')
 	dq = generate_data_quality_report(merged, orders, delivery, customers, shopping, DATA_DIR, remove_duplicates=False)
 	if dq.get('report_path'):
@@ -302,23 +335,23 @@ def main():
 	# KPIs básicos (formatado)
 	print_kpis(merged)
 
-	# Conversion by payment
+	# Conversão por forma de pagamento
 	if 'payment' in merged and 'Purchase_Status' in merged:
 		conv = merged.groupby('payment')['Purchase_Status'].value_counts().unstack(fill_value=0)
 		if 'Confirmado' in conv.columns:
 			conv['conversion_rate_confirmado'] = conv['Confirmado'] / conv.sum(axis=1)
-		# format for display
+		# formata para exibição
 		conv_display = conv.copy()
 		if 'conversion_rate_confirmado' in conv_display.columns:
 			conv_display['conversion_rate_confirmado'] = (conv_display['conversion_rate_confirmado'] * 100).map('{:.1f}%'.format)
 		_log_section('Conversão por Forma de Pagamento (top)')
-		# rename conversion column for display if present
+		# renomeia a coluna de conversão para exibição, se presente
 		disp = conv_display.copy()
 		if 'conversion_rate_confirmado' in disp.columns:
 			disp = disp.rename(columns={'conversion_rate_confirmado': 'Taxa de conversão (Confirmado)'})
 		logging.info('\n%s', disp.sort_values('Taxa de conversão (Confirmado)', ascending=False).to_string())
 
-	# Logistics performance by Services
+	# Desempenho logístico por Serviço
 	if 'Services' in merged:
 		log_perf = merged.groupby('Services').agg(
 			n_orders=('Id','count'),
@@ -334,7 +367,7 @@ def main():
 		if 'avg_freight' in lp.columns:
 			lp['avg_freight'] = lp['avg_freight'].map(fmt_currency)
 		_log_section('Desempenho Logístico por Serviço')
-		# human-friendly column names
+		# nomes de colunas amigáveis para apresentação
 		disp_lp = lp.rename(columns={
 			'Services': 'Serviço',
 			'n_orders': 'Pedidos',
@@ -344,40 +377,40 @@ def main():
 		})
 		logging.info('\n%s', disp_lp.to_string(index=False))
 
-	# --- Product-level analysis ---
+	# --- Análise a nível de produto ---
 	if shopping is not None and products is not None:
 		logging.info('\n--- Análise de Produtos ---')
-		# Create a new df for order items. Use the original orders table for the base.
-		# include order-level Discount so we can evaluate whether the item had a discount
+		# Cria um novo DataFrame de itens do pedido. Usa a tabela original de pedidos como base.
+		# Inclui o Discount ao nível do pedido para avaliarmos se o item teve desconto
 		order_items = orders[['Id', 'Order_Date', 'Discount']].merge(shopping, on='Id', how='inner')
-		# DIM_Shopping stores product NAMES in column 'Product'. DIM_Products has 'Product_Name' and Product_Id.
-		# Join by product name so we can get category and product metadata. If you have a product id column in shopping,
-		# prefer joining on that for better reliability.
-		# Merge products: avoid silent column collisions by using explicit suffixes.
-		# prefer the price coming from the shopping/item row (left), and keep product metadata on the right.
+		# O `DIM_Shopping` armazena nomes de produto na coluna 'Product'. `DIM_Products` tem 'Product_Name' e 'Product_Id'.
+		# Faz a junção por nome de produto para obter categoria e metadata do produto. Se houver coluna de id do
+		# produto no shopping, prefira juntá-la (mais confiável).
+		# Faz o merge com `products` usando sufixos explícitos para evitar colisões silenciosas de nomes de coluna.
+		# Prefere o preço vindo da linha do shopping/item (esquerda) e mantém metadados do catálogo à direita.
 		order_items = order_items.merge(products, left_on='Product', right_on='Product_Name', how='left', suffixes=('_shop', '_prod'))
 
-		# Normalize price column: shopping.Price (price charged at item level) is preferred.
+		# Normaliza a coluna de preço: prefere `Price` do shopping (preço cobrado no nível do item).
 		if 'Price_shop' in order_items.columns:
 			order_items['Price'] = order_items['Price_shop']
 		elif 'Price' in order_items.columns:
-			# fallback (unlikely because of suffixing) - keep existing
+			# fallback (improvável devido ao uso de sufixos) - mantém o existente
 			pass
 		elif 'Price_prod' in order_items.columns:
-			# fallback to product catalog price if shopping price missing
+			# fallback para o preço do catálogo caso o preço do shopping esteja ausente
 			order_items['Price'] = order_items['Price_prod']
 
-		# Calculate item-level revenue and check for discounts
+		# Calcula receita por item e sinaliza se houve desconto
 		order_items['item_revenue'] = order_items['Quantity'] * order_items['Price']
 		order_items['has_discount'] = order_items['Discount'] > 0
 
-		# 1. Category Mix
+		# 1. Mix por Categoria
 		cat_mix = order_items.groupby('Category').agg(
 			revenue=('item_revenue', 'sum'),
 			n_items=('Quantity', 'sum')
 		).sort_values('revenue', ascending=False)
 
-		# Report unmapped items (after merge) so user can see if product names didn't match
+		# Salva itens não mapeados (após o merge) para o usuário avaliar nomes que não bateram com o catálogo
 		if order_items['Category'].isnull().any():
 			unmatched = order_items[order_items['Category'].isnull()].copy()
 			unmatched_path = DATA_DIR / 'unmatched_order_items.csv'
@@ -392,21 +425,21 @@ def main():
 		else:
 			cat_mix['revenue_share'] = 0
 
-		# Format for display
+		# Formata para exibição
 		cat_mix_display = cat_mix.copy()
-		# format numeric columns
+		# formata colunas numéricas
 		cat_mix_display['Receita'] = cat_mix_display['revenue'].map(fmt_currency)
 		cat_mix_display['Quantidade'] = cat_mix_display['n_items'].map(lambda x: f"{int(x):,}")
 		if 'revenue_share' in cat_mix_display.columns:
 			cat_mix_display['Participacao_receita'] = (cat_mix_display['revenue_share'] * 100).map('{:.1f}%'.format)
 		else:
 			cat_mix_display['Participacao_receita'] = ''
-		# keep only friendly columns in desired order
+		# mantém apenas colunas amigáveis na ordem desejada
 		cat_mix_display = cat_mix_display[['Receita', 'Quantidade', 'Participacao_receita']]
 		_log_section('Mix de Receita por Categoria de Produto')
-		# index name in Portuguese
+		# nome do índice em Português
 		cat_mix_display.index.name = 'Categoria'
-		# rename columns for display (with spaces)
+		# renomeia colunas para exibição (com espaços)
 		cat_mix_display = cat_mix_display.rename(columns={
 			'Receita': 'Receita',
 			'Quantidade': 'Quantidade',
@@ -414,29 +447,29 @@ def main():
 		})
 		logging.info('\n%s', cat_mix_display.to_string())
 
-		# 2. Simplified Elasticity Analysis
-		# Compare avg price for items with and without discount
+		# 2. Análise de elasticidade simplificada
+		# Compara preço médio de itens com e sem desconto
 		elasticity_analysis = order_items.groupby('has_discount').agg(
 			avg_price=('Price', 'mean'),
 			total_quantity=('Quantity', 'sum')
 		).reset_index()
-		# Make display-friendly
+		# Torna a tabela amigável para exibição
 		elasticity_display = elasticity_analysis.copy()
-		# map boolean/int to labels
+		# mapeia boolean/int para rótulos legíveis
 		elasticity_display['Discount Status'] = elasticity_display['has_discount'].map({True: 'Com desconto', False: 'Sem desconto'})
 		if 'avg_price' in elasticity_display.columns:
 			elasticity_display['Average Price'] = elasticity_display['avg_price'].map(lambda x: fmt_currency(x) if pd.notna(x) else '')
 		if 'total_quantity' in elasticity_display.columns:
 			elasticity_display['Total Quantity'] = elasticity_display['total_quantity'].map(lambda x: f"{int(x):,}")
-		# select and order columns for neat output
+		# seleciona e ordena colunas para saída mais organizada
 		elasticity_display = elasticity_display[['Discount Status', 'Average Price', 'Total Quantity']]
-		# translate column names to Portuguese for display
+		# traduz nomes de colunas para Português para exibição
 		elasticity_display = elasticity_display.rename(columns={
 			'Discount Status': 'Status do desconto',
 			'Average Price': 'Preço médio',
 			'Total Quantity': 'Quantidade total'
 		})
-		# Build a human-friendly aligned table and ensure both rows exist (Com desconto / Sem desconto)
+		# Monta uma tabela alinhada e garante que ambas as linhas existam (Com desconto / Sem desconto)
 		rows = {}
 		for _, r in elasticity_display.iterrows():
 			status = r['Status do desconto']
@@ -444,19 +477,19 @@ def main():
 				'price': r.get('Preço médio', ''),
 				'qty': r.get('Quantidade total', '')
 			}
-		# ensure both keys present
+		# garante que ambas as chaves estejam presentes
 		for key in ['Com desconto', 'Sem desconto']:
 			if key not in rows:
 				rows[key] = {'price': '', 'qty': 0}
 
-		# format lines
+		# formata as linhas da tabela
 		head = f"{'Status do desconto':<18} {'Preço médio':>18} {'Quantidade':>14}"
 		sep = '-' * len(head)
 		lines = [head, sep]
 		for key in ['Com desconto', 'Sem desconto']:
 			price = rows[key]['price']
 			qty = rows[key]['qty']
-			# price: may already be a formatted string (from earlier steps) or numeric
+			# price: pode já estar formatado (string) ou ser numérico
 			if price is None or (isinstance(price, str) and price.strip() == ''):
 				price_disp = '-'
 			elif isinstance(price, (int, float, np.integer, np.floating)):
@@ -464,14 +497,14 @@ def main():
 			elif isinstance(price, str) and price.strip().startswith('R$'):
 				price_disp = price
 			else:
-				# try to coerce numeric from string
+				# tenta converter string para número
 				try:
 					p = float(str(price).replace('R$', '').replace(',', ''))
 					price_disp = fmt_currency(p)
 				except Exception:
 					price_disp = str(price)
 
-			# qty: accept numeric or strings with thousands separator
+			# qty: aceita valor numérico ou strings com separador de milhares
 			try:
 				if isinstance(qty, (int, np.integer)):
 					qty_disp = f"{int(qty):,}"
@@ -489,7 +522,7 @@ def main():
 		_log_section('Preço x Desconto (Elasticidade Simplificada)')
 		logging.info('\n%s', _table)
 
-	# EDA plots
+	# Gráficos de EDA
 	sns.set(style='whitegrid')
 	try:
 		if 'Total' in merged:
@@ -510,9 +543,9 @@ def main():
 			plt.savefig(FIG_DIR / 'leadtime_box.png')
 			plt.close()
 
-		# Discount plots: histogram and boxplot
+			# Gráficos de desconto: histograma e boxplot
 		if 'Discount' in merged:
-			# histogram
+				# histograma
 			plt.figure(figsize=(8,4))
 			sns.histplot(merged['Discount'].dropna(), kde=True, bins=30)
 			plt.title('Distribution of Discount')
@@ -541,7 +574,7 @@ def main():
 			plt.close()
 
 		if 'Order_Date' in merged and 'Total' in merged:
-			# use month-end resampling to avoid future deprecation warnings
+			# usa reamostragem por fim do mês para evitar avisos de depreciação no futuro
 			rev_month = merged.set_index('Order_Date').resample('ME')['Total'].sum()
 			plt.figure(figsize=(10,4))
 			rev_month.plot(marker='o')
@@ -553,7 +586,7 @@ def main():
 	except Exception as e:
 		warnings.warn(f"Erro ao gerar gráficos: {e}")
 
-	# Inference
+	# Inferência
 	print('\nInferência estatística:')
 	# --- Ticket médio (IC t) ---
 	if 'Total' in merged:
@@ -563,9 +596,9 @@ def main():
 			ticket_se = stats.sem(tickets)
 			try:
 				ticket_ci = stats.t.interval(0.95, df=len(tickets)-1, loc=ticket_mean, scale=ticket_se)
-				# pretty print
+				# formata a impressão
 				print(f"Ticket médio: {fmt_currency(ticket_mean)} | IC 95%: ({fmt_currency(ticket_ci[0])}, {fmt_currency(ticket_ci[1])})")
-					# visualization removed: figures for ticket mean are optional and not saved by default
+					# visualização removida: figuras do ticket médio são opcionais e não são salvas por padrão
 			except Exception:
 				print('Não foi possível calcular o IC t (dados insuficientes).')
 
@@ -579,9 +612,9 @@ def main():
 			prop_se = np.sqrt(prop*(1-prop)/n)
 			prop_ci = (prop - 1.96*prop_se, prop + 1.96*prop_se)
 			print(f"Proporção de atrasos: {prop:.3%}, IC 95% (aprox.): ({prop_ci[0]:.3%}, {prop_ci[1]:.3%})")
-				# visualization removed: proportion plot is optional and not saved by default
+				# visualização removida: gráfico de proporção é opcional e não é salvo por padrão
 
-	# Save cleaned dataset
+	# Salva dataset limpo
 	outpath = DATA_DIR / 'cleaned_orders.csv'
 	merged.to_csv(outpath, index=False)
 	print(f"Dataset limpo salvo em: {outpath}")
